@@ -1,57 +1,49 @@
-import { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { useCallback, useEffect, useState } from 'react';
 
 /**
- * Fetches all observations within a date range, optionally filtered by crew.
- * Returns raw rows — charts and KPI cards derive their own slices.
+ * Loads the dashboard's static demo dataset (public/data/observations.json)
+ * once and caches it in module scope. It's a same-origin static file, not a
+ * database query, so this has no dependency on Supabase staying awake and
+ * no meaningful load time. The dataset is generated ahead of time by
+ * scripts/generate-demo-dashboard-data.mjs and fixed to a specific end
+ * date, so filtering by "days ago" is relative to that fixed date rather
+ * than the real current date. That's what makes the dashboard look the
+ * same no matter when someone opens it.
  */
-export function useObservations({ days = 180, crewName = 'all' } = {}) {
-  const [data, setData]       = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState(null);
+let cache = null;
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      setError(null);
+export function useRawObservations() {
+  const [data, setData] = useState(cache);
+  const [loading, setLoading] = useState(!cache);
+  const [error, setError] = useState(null);
 
-      const since = new Date();
-      since.setDate(since.getDate() - days);
-
-      let query = supabase
-        .from('observations')
-        .select('*')
-        .gte('observed_at', since.toISOString())
-        .order('observed_at', { ascending: true });
-
-      if (crewName !== 'all') {
-        query = query.eq('crew_name', crewName);
-      }
-
-      const { data: rows, error: err } = await query;
-
-      if (err) {
+  const load = useCallback(() => {
+    if (cache) {
+      setData(cache);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    fetch('/data/observations.json')
+      .then(res => {
+        if (!res.ok) throw new Error(`Failed to load dataset (${res.status})`);
+        return res.json();
+      })
+      .then(json => {
+        cache = json;
+        setData(json);
+        setLoading(false);
+      })
+      .catch(err => {
         setError(err.message);
         setLoading(false);
-        return;
-      }
+      });
+  }, []);
 
-      setData(rows || []);
-      setLoading(false);
-    };
+  useEffect(() => {
+    load();
+  }, [load]);
 
-    fetchData();
-
-    // Real-time subscription — new submissions appear instantly
-    const channel = supabase
-      .channel('observations_realtime')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'observations' }, () => {
-        fetchData();
-      })
-      .subscribe();
-
-    return () => supabase.removeChannel(channel);
-  }, [days, crewName]);
-
-  return { data, loading, error };
+  return { data, loading, error, refetch: load };
 }

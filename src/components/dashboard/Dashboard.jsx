@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
-import { useObservations } from '../../hooks/useObservations';
+import { useRawObservations } from '../../hooks/useObservations';
 import KPICard from './KPICard';
+import { Loader2, AlertTriangle, RotateCw } from 'lucide-react';
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -8,8 +9,8 @@ import {
 
 // ── Color palette (matches brand) ────────────────────────────────
 const COLORS = {
-  'Safe Behavior':         '#22c55e',
-  'Positive Reinforcement':'#3b82f6',
+  'Safe Behavior':         '#50BB40', // brand-green
+  'Positive Reinforcement':'#14BCD9', // brand-cyan
   'At-Risk Behavior':      '#f59e0b',
   'Near Miss':             '#ef4444',
 };
@@ -27,23 +28,15 @@ const DATE_RANGES = [
   { label: '90 days',  days: 90 },
   { label: '6 months', days: 180 },
 ];
-const BRAND_BLUE = '#1B4F8A';
-const BRAND_BLUE_MID = '#2E75B6';
+const BRAND_NAVY = '#005984';
+const BRAND_GREEN = '#50BB40';
 
-// ── Helpers ──────────────────────────────────────────────────────
-const isoWeek = (dateStr) => {
-  const d = new Date(dateStr);
-  const day = d.getDay() || 7;
-  d.setDate(d.getDate() + 4 - day);
-  const yearStart = new Date(d.getFullYear(), 0, 1);
-  return `W${Math.ceil(((d - yearStart) / 86400000 + 1) / 7).toString().padStart(2, '0')}`;
-};
-const pct = (num, den) => den === 0 ? '—' : `${Math.round((num / den) * 100)}%`;
+const pct = (num, den) => den === 0 ? 'N/A' : `${Math.round((num / den) * 100)}%`;
 
 // ── Filters bar ──────────────────────────────────────────────────
 function FiltersBar({ days, setDays, crew, setCrew, crews }) {
   return (
-    <div className="flex flex-wrap items-center gap-3 bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm">
+    <div className="flex flex-wrap items-center gap-3 bg-white border border-hairline rounded-xl px-4 py-3">
       <span className="text-sm font-medium text-gray-500">Filter:</span>
 
       {/* Date range */}
@@ -54,7 +47,7 @@ function FiltersBar({ days, setDays, crew, setCrew, crews }) {
             onClick={() => setDays(r.days)}
             className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
               days === r.days
-                ? 'bg-brand-blue text-white'
+                ? 'bg-brand-navy text-white'
                 : 'text-gray-600 hover:bg-gray-100'
             }`}
           >
@@ -63,20 +56,20 @@ function FiltersBar({ days, setDays, crew, setCrew, crews }) {
         ))}
       </div>
 
-      <div className="w-px h-5 bg-gray-200" />
+      <div className="w-px h-5 bg-hairline" />
 
       {/* Crew */}
       <select
         value={crew}
         onChange={e => setCrew(e.target.value)}
-        className="border border-gray-200 rounded-md px-2 py-1 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-brand-blue-mid"
+        className="border border-hairline rounded-md px-2 py-1 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-brand-cyan"
       >
         <option value="all">All Crews</option>
         {crews.map(c => <option key={c} value={c}>{c}</option>)}
       </select>
 
       <div className="ml-auto text-xs text-gray-400">
-        Live data · refreshes on new submissions
+        Demo dataset, trends shown are illustrative
       </div>
     </div>
   );
@@ -85,7 +78,7 @@ function FiltersBar({ days, setDays, crew, setCrew, crews }) {
 // ── Chart wrapper ────────────────────────────────────────────────
 function ChartCard({ title, children, span = 1 }) {
   return (
-    <div className={`bg-white border border-gray-200 rounded-xl shadow-sm p-5 ${span === 2 ? 'lg:col-span-2' : ''}`}>
+    <div className={`bg-white border border-hairline rounded-2xl p-5 ${span === 2 ? 'lg:col-span-2' : ''}`}>
       <h3 className="text-sm font-semibold text-gray-700 mb-4">{title}</h3>
       {children}
     </div>
@@ -97,13 +90,24 @@ export default function Dashboard() {
   const [days, setDays] = useState(180);
   const [crew, setCrew] = useState('all');
 
-  const { data, loading, error } = useObservations({ days, crewName: crew });
+  const { data: dataset, loading, error, refetch } = useRawObservations();
 
-  // Derive unique crews for the filter dropdown
+  const data = useMemo(() => {
+    if (!dataset) return [];
+    const anchor = new Date(dataset.dataEnd);
+    const since = new Date(anchor);
+    since.setUTCDate(since.getUTCDate() - days);
+    return dataset.rows.filter(r => {
+      if (new Date(r.observed_at) < since) return false;
+      if (crew !== 'all' && r.crew_name !== crew) return false;
+      return true;
+    });
+  }, [dataset, days, crew]);
+
   const allCrews = useMemo(() => {
-    const { data: all } = { data }; // re-use same hook data — just unique names
-    return [...new Set(data.map(r => r.crew_name))].sort();
-  }, [data]);
+    if (!dataset) return [];
+    return [...new Set(dataset.rows.map(r => r.crew_name))].sort();
+  }, [dataset]);
 
   // ── KPI derivations ──────────────────────────────────────────
   const kpis = useMemo(() => {
@@ -119,15 +123,24 @@ export default function Dashboard() {
   }, [data]);
 
   // ── Weekly trend ─────────────────────────────────────────────
+  // Buckets are measured in whole weeks back from the dataset's fixed end
+  // date, not calendar weeks, so every bucket covers a full 7 days and the
+  // chart never shows an artificial dip from a partial trailing week.
   const weeklyTrend = useMemo(() => {
+    if (!dataset) return [];
+    const dayOnly = (d) => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+    const anchorDay = dayOnly(new Date(dataset.dataEnd));
     const map = {};
     data.forEach(r => {
-      const wk = isoWeek(r.observed_at);
-      if (!map[wk]) map[wk] = { week: wk, 'Safe Behavior': 0, 'At-Risk Behavior': 0, 'Near Miss': 0, 'Positive Reinforcement': 0 };
-      map[wk][r.observation_category] = (map[wk][r.observation_category] || 0) + 1;
+      const daysAgo = Math.round((anchorDay - dayOnly(new Date(r.observed_at))) / 86400000);
+      const weeksAgo = Math.floor(daysAgo / 7);
+      if (!map[weeksAgo]) map[weeksAgo] = { weeksAgo, 'Safe Behavior': 0, 'At-Risk Behavior': 0, 'Near Miss': 0, 'Positive Reinforcement': 0 };
+      map[weeksAgo][r.observation_category] = (map[weeksAgo][r.observation_category] || 0) + 1;
     });
-    return Object.values(map).sort((a, b) => a.week.localeCompare(b.week));
-  }, [data]);
+    return Object.values(map)
+      .sort((a, b) => b.weeksAgo - a.weeksAgo)
+      .map((w, i) => ({ ...w, week: `W${(i + 1).toString().padStart(2, '0')}` }));
+  }, [data, dataset]);
 
   // ── Category pie ─────────────────────────────────────────────
   const categoryPie = useMemo(() => {
@@ -162,6 +175,9 @@ export default function Dashboard() {
   }, [data]);
 
   // ── Root cause breakdown ──────────────────────────────────────
+  // Capped to the top 6 so the chart always shows a consistent, readable
+  // set of labels rather than however many distinct causes happen to show
+  // up in a given filter.
   const rootCauses = useMemo(() => {
     const map = {};
     data.forEach(r => {
@@ -171,15 +187,16 @@ export default function Dashboard() {
     });
     return Object.entries(map)
       .map(([cause, count]) => ({ cause: cause.replace(' / ', '/'), count }))
-      .sort((a, b) => b.count - a.count);
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 6);
   }, [data]);
 
   // ── Loading / error states ────────────────────────────────────
-  if (loading) {
+  if (loading || !dataset) {
     return (
       <div className="flex items-center justify-center h-64 text-gray-400">
         <div className="text-center">
-          <div className="text-3xl mb-2 animate-pulse">⚡</div>
+          <Loader2 className="w-7 h-7 mx-auto mb-2 text-brand-cyan animate-spin" strokeWidth={2.5} />
           <p className="text-sm">Loading observations…</p>
         </div>
       </div>
@@ -188,9 +205,16 @@ export default function Dashboard() {
 
   if (error) {
     return (
-      <div className="max-w-lg mx-auto mt-16 bg-red-50 border border-red-200 rounded-xl p-6 text-center">
-        <p className="text-red-700 font-medium mb-1">Failed to load data</p>
-        <p className="text-red-500 text-sm">{error}</p>
+      <div className="max-w-lg mx-auto mt-16 bg-white border border-hairline rounded-2xl p-8 text-center">
+        <AlertTriangle className="w-10 h-10 mx-auto mb-3 text-brand-navy" strokeWidth={1.75} />
+        <p className="text-gray-900 font-semibold mb-1">Dashboard data is temporarily unavailable</p>
+        <p className="text-gray-500 text-sm mb-5">The demo dataset didn't load. This usually clears up on a retry.</p>
+        <button
+          onClick={refetch}
+          className="inline-flex items-center gap-2 px-4 py-2.5 bg-brand-navy text-white rounded-xl text-sm font-semibold hover:bg-brand-cyan hover:text-brand-navy transition-colors"
+        >
+          <RotateCw className="w-4 h-4" /> Retry
+        </button>
       </div>
     );
   }
@@ -203,18 +227,18 @@ export default function Dashboard() {
 
       {/* KPI row */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-        <KPICard label="Total Observations"  value={kpis.total}                    sub={`last ${days}d`} />
+        <KPICard label="Total Observations"  value={kpis.total.toLocaleString()}   sub={`last ${days}d`} />
         <KPICard label="Safe : At-Risk"       value={`${kpis.ratio}:1`}             sub="ratio" intent="good" />
-        <KPICard label="At-Risk + Near Miss"  value={kpis.atRisk}                   sub={pct(kpis.atRisk, kpis.total)} trend={kpis.atRisk > 30 ? 'up' : null} intent="bad" />
-        <KPICard label="Near Misses"          value={kpis.nearMiss}                 sub="total reported" intent="bad" />
+        <KPICard label="At-Risk + Near Miss"  value={kpis.atRisk.toLocaleString()}  sub={pct(kpis.atRisk, kpis.total)} trend={kpis.atRisk / kpis.total > 0.3 ? 'up' : null} intent="bad" />
+        <KPICard label="Near Misses"          value={kpis.nearMiss.toLocaleString()} sub="total reported" intent="bad" />
         <KPICard label="Follow-Up Closure"    value={pct(kpis.closedFU, kpis.followUps)} sub={`${kpis.closedFU}/${kpis.followUps} closed`} intent="good" />
-        <KPICard label="Briefing Non-Comply"  value={kpis.briefingNo}               sub="job briefings missed" intent="bad" />
+        <KPICard label="Briefing Non-Comply"  value={kpis.briefingNo.toLocaleString()} sub="job briefings missed" intent="bad" />
       </div>
 
-      {/* Charts — row 1 */}
+      {/* Charts, row 1 */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
-        {/* Weekly trend — spans 2 cols */}
+        {/* Weekly trend, spans 2 cols */}
         <ChartCard title="Weekly Observation Trend by Category" span={2}>
           <ResponsiveContainer width="100%" height={240}>
             <LineChart data={weeklyTrend} margin={{ top: 0, right: 8, left: -20, bottom: 0 }}>
@@ -224,7 +248,7 @@ export default function Dashboard() {
               <Tooltip />
               <Legend wrapperStyle={{ fontSize: 12 }} />
               {Object.entries(COLORS).map(([cat, color]) => (
-                <Line key={cat} type="monotone" dataKey={cat} stroke={color} strokeWidth={2} dot={false} />
+                <Line key={cat} type="linear" dataKey={cat} stroke={color} strokeWidth={2} dot={false} />
               ))}
             </LineChart>
           </ResponsiveContainer>
@@ -246,7 +270,7 @@ export default function Dashboard() {
         </ChartCard>
       </div>
 
-      {/* Charts — row 2 */}
+      {/* Charts, row 2 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
         {/* PPE compliance */}
@@ -257,9 +281,9 @@ export default function Dashboard() {
               <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11 }} tickFormatter={v => `${v}%`} />
               <YAxis type="category" dataKey="label" width={110} tick={{ fontSize: 11 }} />
               <Tooltip formatter={(val) => [`${val}%`, 'Compliance Rate']} />
-              <Bar dataKey="rate" fill={BRAND_BLUE_MID} radius={[0, 4, 4, 0]}>
+              <Bar dataKey="rate" fill={BRAND_GREEN} radius={[0, 4, 4, 0]}>
                 {ppeCompliance.map((entry) => (
-                  <Cell key={entry.label} fill={entry.rate < 85 ? '#ef4444' : entry.rate < 92 ? '#f59e0b' : BRAND_BLUE_MID} />
+                  <Cell key={entry.label} fill={entry.rate < 85 ? '#ef4444' : entry.rate < 92 ? '#f59e0b' : BRAND_GREEN} />
                 ))}
               </Bar>
             </BarChart>
@@ -269,14 +293,14 @@ export default function Dashboard() {
         {/* Crew comparison */}
         <ChartCard title="Observations by Crew (total vs. at-risk %)">
           <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={crewComparison} margin={{ top: 0, right: 8, left: -20, bottom: 0 }}>
+            <BarChart data={crewComparison.slice(0, 15)} margin={{ top: 0, right: 8, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="crew" tick={{ fontSize: 11 }} />
+              <XAxis dataKey="crew" tick={{ fontSize: 10 }} interval={0} angle={-30} textAnchor="end" height={50} />
               <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
               <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} tickFormatter={v => `${v}%`} />
               <Tooltip />
               <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Bar yAxisId="left"  dataKey="total"      name="Total Obs"   fill={BRAND_BLUE}     radius={[4, 4, 0, 0]} />
+              <Bar yAxisId="left"  dataKey="total"      name="Total Obs"   fill={BRAND_NAVY}     radius={[4, 4, 0, 0]} />
               <Bar yAxisId="right" dataKey="atRiskPct"  name="At-Risk %"   fill="#f59e0b"        radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -285,11 +309,11 @@ export default function Dashboard() {
 
       {/* Root cause breakdown */}
       {rootCauses.length > 0 && (
-        <ChartCard title="Root Cause Distribution (at-risk & near miss observations only)" span={2}>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={rootCauses} margin={{ top: 0, right: 8, left: -20, bottom: 0 }}>
+        <ChartCard title="Top Root Causes (at-risk & near miss observations only)" span={2}>
+          <ResponsiveContainer width="100%" height={230}>
+            <BarChart data={rootCauses} margin={{ top: 0, right: 20, left: 10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="cause" tick={{ fontSize: 11 }} />
+              <XAxis dataKey="cause" tick={{ fontSize: 10 }} interval={0} angle={-20} textAnchor="end" height={80} padding={{ left: 30, right: 30 }} />
               <YAxis tick={{ fontSize: 11 }} />
               <Tooltip />
               <Bar dataKey="count" name="Count" fill="#f59e0b" radius={[4, 4, 0, 0]} />
@@ -297,6 +321,10 @@ export default function Dashboard() {
           </ResponsiveContainer>
         </ChartCard>
       )}
+
+      <p className="text-center text-xs text-gray-400">
+        Showing {kpis.total.toLocaleString()} observations across {crewComparison.length} crews. Top 15 crews charted above.
+      </p>
 
     </div>
   );

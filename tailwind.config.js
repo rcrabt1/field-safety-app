@@ -5,15 +5,18 @@ export default {
     extend: {
       colors: {
         brand: {
-          blue:        '#1B4F8A',
-          'blue-mid':  '#2E75B6',
-          'blue-lt':   '#D6E4F0',
-          orange:      '#E8731A',
-          'orange-lt': '#FDF1E7',
+          navy:      '#005984',
+          'navy-lt': '#E4F0F5',
+          cyan:      '#14BCD9',
+          'cyan-lt': '#E6F8FB',
+          green:     '#50BB40',
+          'green-lt':'#EBF7E9',
         },
+        surface:  '#F5F2EC',
+        hairline: '#DDD9D2',
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        sans: ['Plus Jakarta Sans', 'system-ui', 'sans-serif'],
       },
     },
   },

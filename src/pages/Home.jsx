@@ -1,65 +1,55 @@
 import { Link } from 'react-router-dom';
+import { HardHat, LayoutDashboard, ArrowRight } from 'lucide-react';
 
 export default function Home() {
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-16">
-      {/* Hero */}
-      <div className="text-center mb-14">
-        <div className="text-5xl mb-4">⚡</div>
-        <h1 className="text-4xl font-bold text-gray-900 mb-3">Field Safety Observation Tool</h1>
-        <p className="text-lg text-gray-500 max-w-2xl mx-auto">
-          A working recreation of a native iOS/Android app I shipped for a US utility company,
-          rebuilt as a responsive web app with a live reporting dashboard.
+    <div className="min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center px-4 sm:px-6 py-16 bg-surface">
+      <div className="text-center mb-12 max-w-xl">
+        <h1 className="text-3xl sm:text-4xl font-extrabold text-brand-navy mb-3 tracking-tight">
+          Field Safety Observation Tool
+        </h1>
+        <p className="text-base text-gray-500">
+          One app, two completely different jobs. Pick the one you want to try.
         </p>
       </div>
 
-      {/* Two entry-point cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-16">
-        <Link to="/observe" className="group block bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-md hover:border-brand-blue transition-all p-7">
-          <div className="text-3xl mb-3">📋</div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2 group-hover:text-brand-blue transition-colors">Submit an Observation</h2>
-          <p className="text-gray-500 text-sm leading-relaxed">
-            Experience the field supervisor view. Fill out a safety observation form exactly as a linework supervisor would in the field.
-          </p>
-          <span className="inline-block mt-4 text-sm font-medium text-brand-blue-mid group-hover:translate-x-1 transition-transform">
-            Open form →
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 w-full max-w-3xl">
+        <Link
+          to="/observe"
+          className="group relative overflow-hidden rounded-2xl bg-brand-navy text-white p-8 flex flex-col justify-between min-h-[220px] transition-transform hover:-translate-y-1"
+        >
+          <HardHat className="w-9 h-9 text-brand-cyan mb-4" strokeWidth={1.75} />
+          <div>
+            <h2 className="text-xl font-bold mb-1">Field Supervisor</h2>
+            <p className="text-sm text-blue-100/80 leading-relaxed">
+              Submit a safety observation from the field. Built for tough conditions, spotty internet, and quick completion.
+            </p>
+          </div>
+          <span className="inline-flex items-center gap-1 mt-5 text-sm font-semibold text-brand-cyan group-hover:gap-2 transition-all">
+            Enter the field <ArrowRight className="w-4 h-4" />
           </span>
         </Link>
 
-        <Link to="/dashboard" className="group block bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-md hover:border-brand-blue transition-all p-7">
-          <div className="text-3xl mb-3">📊</div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2 group-hover:text-brand-blue transition-colors">View the Dashboard</h2>
-          <p className="text-gray-500 text-sm leading-relaxed">
-            The safety manager view — real-time aggregated reporting across crews, replacing the original Power BI layer.
-          </p>
-          <span className="inline-block mt-4 text-sm font-medium text-brand-blue-mid group-hover:translate-x-1 transition-transform">
-            Open dashboard →
+        <Link
+          to="/dashboard"
+          className="group relative overflow-hidden rounded-2xl border border-hairline bg-white p-8 flex flex-col justify-between min-h-[220px] transition-transform hover:-translate-y-1"
+        >
+          <LayoutDashboard className="w-9 h-9 text-brand-navy mb-4" strokeWidth={1.75} />
+          <div>
+            <h2 className="text-xl font-bold text-gray-900 mb-1">Safety Manager</h2>
+            <p className="text-sm text-gray-500 leading-relaxed">
+              Analyze safety performance across the enterprise and implement safer procedures.
+            </p>
+          </div>
+          <span className="inline-flex items-center gap-1 mt-5 text-sm font-semibold text-brand-navy group-hover:gap-2 transition-all">
+            Open dashboard <ArrowRight className="w-4 h-4" />
           </span>
         </Link>
       </div>
 
-      {/* PM backstory */}
-      <div className="bg-brand-blue-lt border border-brand-blue-lt rounded-2xl p-8">
-        <h2 className="text-lg font-semibold text-brand-blue mb-4">About This Project</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-sm text-gray-700 leading-relaxed">
-          <div>
-            <p className="font-semibold text-gray-900 mb-1">The Original Product</p>
-            <p>A native iOS/Android app used by field supervisors at a US utility company to document safety observations of overhead and underground power line crews in real time.</p>
-          </div>
-          <div>
-            <p className="font-semibold text-gray-900 mb-1">What I Did</p>
-            <p>Led product discovery, defined the data model across 30+ fields, designed the mobile UX for gloved-hand field use, and defined the Power BI reporting layer for safety managers.</p>
-          </div>
-          <div>
-            <p className="font-semibold text-gray-900 mb-1">This Recreation</p>
-            <p>Rebuilt as a responsive React web app with Supabase backend and Recharts dashboard. All data shown is synthetic — no real crew names, sites, or client information.</p>
-          </div>
-        </div>
-        <p className="text-xs text-gray-400 mt-6">
-          Built by Ryan Crabtree · Director of Product Management ·{' '}
-          <a href="https://ryancrabtree.me" className="underline hover:text-brand-blue">ryancrabtree.me</a>
-        </p>
-      </div>
+      <p className="text-xs text-gray-400 mt-10 text-center max-w-md">
+        This is a portfolio demo. Every crew, site, and number you see here is made up.
+      </p>
     </div>
   );
 }
