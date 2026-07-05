@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { supabase } from '../../lib/supabase';
 import { CheckCircle2, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 
 // ── Form field constants ───────────────────────────────────────────
@@ -140,8 +139,7 @@ function RadioGroup({ name, value, onChange, options, required }) {
 export default function ObservationForm() {
   const [form, setForm] = useState(defaultForm);
   const [step, setStep] = useState(0);
-  const [status, setStatus] = useState('idle'); // idle | submitting | success | error
-  const [errorMsg, setErrorMsg] = useState('');
+  const [status, setStatus] = useState('idle'); // idle | submitting | success
 
   const isAtRisk = form.observation_category === 'At-Risk Behavior' || form.observation_category === 'Near Miss';
   const needsFollowUp = form.follow_up_required === 'Yes';
@@ -161,65 +159,15 @@ export default function ObservationForm() {
     }));
   };
 
-  // Every field is optional in this demo, but the underlying table still
-  // expects a valid value for these columns, so anything left blank falls
-  // back to a sensible default rather than blocking the visitor.
+  // There's no backend behind this demo form. Submitting just simulates the
+  // brief round trip the real product would make, then shows success.
   const submitObservation = async () => {
     setStatus('submitting');
-    setErrorMsg('');
-
-    const orDefault = (val, fallback) => (val ? val : fallback);
-
-    const payload = {
-      ...form,
-      observed_at: new Date(form.observed_at || Date.now()).toISOString(),
-      work_site: orDefault(form.work_site, 'Not specified'),
-      weather_condition: orDefault(form.weather_condition, 'Clear'),
-      supervisor_name: orDefault(form.supervisor_name, 'Demo Supervisor'),
-      crew_name: orDefault(form.crew_name, 'Demo Crew'),
-      workers_observed: parseInt(form.workers_observed, 10) || 1,
-      work_type: orDefault(form.work_type, 'Other'),
-      task_observed: orDefault(form.task_observed, 'Not specified'),
-      energized_status: orDefault(form.energized_status, 'Unknown'),
-      observation_category: orDefault(form.observation_category, 'Safe Behavior'),
-      safety_rating: orDefault(form.safety_rating, 'Satisfactory'),
-      ppe_hard_hat: orDefault(form.ppe_hard_hat, 'N/A'),
-      ppe_safety_glasses: orDefault(form.ppe_safety_glasses, 'N/A'),
-      ppe_arc_flash: orDefault(form.ppe_arc_flash, 'N/A'),
-      ppe_high_vis_vest: orDefault(form.ppe_high_vis_vest, 'N/A'),
-      ppe_rubber_gloves: orDefault(form.ppe_rubber_gloves, 'N/A'),
-      ppe_fall_protection: orDefault(form.ppe_fall_protection, 'N/A'),
-      ppe_grounding: orDefault(form.ppe_grounding, 'N/A'),
-      job_briefing_conducted: orDefault(form.job_briefing_conducted, 'Yes'),
-      loto_applied: orDefault(form.loto_applied, 'N/A'),
-      work_zone_established: orDefault(form.work_zone_established, 'N/A'),
-      tools_inspected: orDefault(form.tools_inspected, 'N/A'),
-      emergency_contacts_known: orDefault(form.emergency_contacts_known, 'Yes'),
-      follow_up_required: orDefault(form.follow_up_required, 'No'),
-      worker_acknowledged: orDefault(form.worker_acknowledged, 'Worker Not Present'),
-      work_order_number:          form.work_order_number || null,
-      safe_behaviors_observed:    form.safe_behaviors_observed || null,
-      at_risk_behaviors_observed: form.at_risk_behaviors_observed || null,
-      root_causes:                form.root_causes.length > 0 ? form.root_causes : null,
-      immediate_corrective_action: form.immediate_corrective_action || null,
-      follow_up_owner:            form.follow_up_owner || null,
-      follow_up_due_date:         form.follow_up_due_date || null,
-      follow_up_completed:        false,
-      supervisor_notes:           form.supervisor_notes || null,
-    };
-
-    const { error } = await supabase.from('observations').insert([payload]);
-
-    if (error) {
-      console.error(error);
-      setErrorMsg(error.message);
-      setStatus('error');
-    } else {
-      setStatus('success');
-      setForm(defaultForm);
-      setStep(0);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
+    await new Promise(resolve => setTimeout(resolve, 500));
+    setStatus('success');
+    setForm(defaultForm);
+    setStep(0);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // Only the current step's inputs exist in the DOM, so native browser
@@ -245,7 +193,7 @@ export default function ObservationForm() {
       <div className="max-w-2xl mx-auto px-4 py-16 text-center">
         <CheckCircle2 className="w-14 h-14 text-brand-green mx-auto mb-4" strokeWidth={1.75} />
         <h2 className="text-2xl font-bold text-gray-900 mb-2">Observation Submitted</h2>
-        <p className="text-gray-500 mb-8">Your observation has been recorded. It will appear in the dashboard within seconds.</p>
+        <p className="text-gray-500 mb-8">This demo doesn't save submissions. In the real product, this observation would sync straight to the reporting dashboard.</p>
         <div className="flex gap-3 justify-center">
           <button
             onClick={() => setStatus('idle')}
@@ -278,13 +226,6 @@ export default function ObservationForm() {
           Step {step + 1} of {STEPS.length} · {STEPS[step]}
         </p>
       </div>
-
-      {/* Error banner */}
-      {status === 'error' && (
-        <div className="bg-red-50 border border-red-300 text-red-700 px-4 py-3 rounded-xl text-sm mb-6">
-          <strong>Submission failed:</strong> {errorMsg}
-        </div>
-      )}
 
       {/* ── Step 1: Header & Crew ──────────────────────────────── */}
       {step === 0 && (
